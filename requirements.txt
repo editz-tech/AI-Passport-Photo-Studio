@@ -1,0 +1,2 @@
+Pillow>=10.0.0
+# Optional background removal: install with `pip install rembg`
