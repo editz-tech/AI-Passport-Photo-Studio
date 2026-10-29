@@ -1,0 +1,53 @@
+name: Build WhiteBG Studio for Windows
+
+on:
+  push:
+    branches: ["build/whitebg-standalone"]
+    paths:
+      - "WhiteBGStudio/**"
+      - ".github/workflows/build-whitebg-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: WhiteBGStudio/requirements.txt
+      - name: Install dependencies
+        working-directory: WhiteBGStudio
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+      - name: Download and bundle AI model
+        working-directory: WhiteBGStudio
+        shell: pwsh
+        run: |
+          python -c "from rembg import new_session; new_session('u2net')"
+          New-Item -ItemType Directory -Force .u2net | Out-Null
+          Copy-Item "$env:USERPROFILE\.u2net\u2net.onnx" ".u2net\u2net.onnx"
+          if (!(Test-Path ".u2net\u2net.onnx")) { throw "AI model was not downloaded." }
+      - name: Build Windows executable
+        working-directory: WhiteBGStudio
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name "WhiteBG Studio" --collect-all rembg --collect-all onnxruntime --add-data ".u2net\u2net.onnx;.u2net" app.py
+      - name: Package executable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item "WhiteBGStudio\dist\WhiteBG Studio.exe" "release\WhiteBG Studio.exe"
+          Copy-Item "WhiteBGStudio\README.txt" "release\README.txt"
+          Compress-Archive -Path "release\*" -DestinationPath "WhiteBGStudio-Windows.zip" -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WhiteBGStudio-Windows
+          path: WhiteBGStudio-Windows.zip
+          if-no-files-found: error
+          retention-days: 14
