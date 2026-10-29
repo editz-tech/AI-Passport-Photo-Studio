@@ -2,7 +2,8 @@ import os, sys, threading
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageFilter
+import numpy as np
 
 # Use the bundled model when packaged, enabling offline processing after installation.
 def resource_path(relative):
@@ -16,6 +17,28 @@ from rembg import remove, new_session
 
 APP_NAME = "WhiteBG Studio"
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
+
+def clean_mask_and_defringe(result):
+    """Reduce background-colored edge halos before compositing onto white."""
+    rgba = result.convert("RGBA")
+    alpha = rgba.getchannel("A")
+    # Remove faint semi-transparent shadow/fringe pixels and contract the
+    # segmentation by a tiny amount, then keep a slight antialias transition.
+    alpha = alpha.point(lambda a: 0 if a < 90 else (255 if a > 210 else int((a - 90) * 255 / 120)))
+    alpha = alpha.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.45))
+    arr = np.asarray(rgba).astype(np.float32)
+    a = np.asarray(alpha).astype(np.float32) / 255.0
+    rgb = arr[:, :, :3]
+    # Brighten only boundary pixels to neutralize brown/grey contamination
+    # left by the old background; keep fully opaque face/clothing pixels intact.
+    edge = (a > 0.01) & (a < 0.98)
+    if np.any(edge):
+        strength = ((0.98 - a) / 0.98 * 0.72)
+        rgb[edge] = rgb[edge] * (1.0 - strength[edge, None]) + 255.0 * strength[edge, None]
+    arr[:, :, :3] = np.clip(rgb, 0, 255)
+    arr[:, :, 3] = a * 255.0
+    return Image.fromarray(arr.astype(np.uint8), "RGBA")
+
 
 class App:
     def __init__(self, root):
@@ -102,10 +125,11 @@ class App:
                     im,
                     session=session,
                     alpha_matting=True,
-                    alpha_matting_foreground_threshold=240,
-                    alpha_matting_background_threshold=10,
-                    alpha_matting_erode_size=10,
+                    alpha_matting_foreground_threshold=250,
+                    alpha_matting_background_threshold=20,
+                    alpha_matting_erode_size=15,
                 ).convert("RGBA")
+                result = clean_mask_and_defringe(result)
                 # Ensure the final canvas is genuinely pure white.
                 white = Image.new("RGBA", result.size, (255,255,255,255))
                 white.alpha_composite(result)
