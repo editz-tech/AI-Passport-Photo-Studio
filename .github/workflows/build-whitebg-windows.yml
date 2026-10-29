@@ -25,12 +25,11 @@ jobs:
         working-directory: WhiteBGStudio
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller cairosvg
+          pip install -r requirements.txt pyinstaller
       - name: Prepare E-PIX desktop icon
         working-directory: WhiteBGStudio
         run: |
-          python -c "import cairosvg; cairosvg.svg2png(url='e-pix-icon.svg', write_to='e-pix-icon.png', output_width=256, output_height=256)"
-          python -c "from PIL import Image; Image.open('e-pix-icon.png').save('e-pix-icon.ico', format='ICO', sizes=[(256,256),(128,128),(64,64),(48,48),(32,32),(16,16)])"
+          python icon_builder.py
       - name: Download and bundle AI model
         working-directory: WhiteBGStudio
         shell: pwsh
