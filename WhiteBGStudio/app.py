@@ -96,7 +96,17 @@ class App:
             try:
                 with Image.open(src) as im:
                     im = ImageOps.exif_transpose(im).convert("RGBA")
-                result = remove(im, session=session).convert("RGBA")
+                # Alpha matting improves fine hair and removes more of the original
+                # background fringe than the default binary-ish mask.
+                result = remove(
+                    im,
+                    session=session,
+                    alpha_matting=True,
+                    alpha_matting_foreground_threshold=240,
+                    alpha_matting_background_threshold=10,
+                    alpha_matting_erode_size=10,
+                ).convert("RGBA")
+                # Ensure the final canvas is genuinely pure white.
                 white = Image.new("RGBA", result.size, (255,255,255,255))
                 white.alpha_composite(result)
                 dest = out / (src.stem + ".jpg")
