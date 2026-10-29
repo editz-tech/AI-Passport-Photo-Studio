@@ -25,7 +25,9 @@ def clean_mask_and_defringe(result):
     # Remove faint semi-transparent shadow/fringe pixels and contract the
     # segmentation by a tiny amount, then keep a slight antialias transition.
     alpha = alpha.point(lambda a: 0 if a < 90 else (255 if a > 210 else int((a - 90) * 255 / 120)))
-    alpha = alpha.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.45))
+    # Contract the mask more decisively so broad ear/neck/shoulder halos are
+    # excluded instead of being carried onto the white canvas.
+    alpha = alpha.filter(ImageFilter.MinFilter(9)).filter(ImageFilter.GaussianBlur(0.35))
     arr = np.asarray(rgba).astype(np.float32)
     a = np.asarray(alpha).astype(np.float32) / 255.0
     rgb = arr[:, :, :3]
@@ -127,7 +129,7 @@ class App:
                     alpha_matting=True,
                     alpha_matting_foreground_threshold=250,
                     alpha_matting_background_threshold=20,
-                    alpha_matting_erode_size=15,
+                    alpha_matting_erode_size=20,
                 ).convert("RGBA")
                 result = clean_mask_and_defringe(result)
                 # Ensure the final canvas is genuinely pure white.
