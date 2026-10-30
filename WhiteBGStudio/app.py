@@ -46,8 +46,9 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title(APP_NAME)
-        root.geometry("760x540")
-        root.minsize(650, 460)
+        root.geometry("1000x700")
+        root.minsize(820, 580)
+        root.configure(bg="#111214")
         self.source = tk.StringVar()
         self.output = tk.StringVar()
         self.status = tk.StringVar(value="Choose photos or a source folder to begin.")
@@ -56,36 +57,102 @@ class App:
         self.build()
 
     def build(self):
-        frame = ttk.Frame(self.root, padding=18); frame.pack(fill="both", expand=True)
-        ttk.Label(frame, text="WhiteBG Studio", font=("Segoe UI", 22, "bold")).pack(anchor="w")
-        ttk.Label(frame, text="Automatic AI background replacement • Pure white #FFFFFF").pack(anchor="w", pady=(2,16))
-        a = ttk.LabelFrame(frame, text="Input photos", padding=10); a.pack(fill="x", pady=5)
-        ttk.Entry(a, textvariable=self.source).pack(side="left", fill="x", expand=True, padx=(0,8))
-        ttk.Button(a, text="Choose folder", command=self.pick_folder).pack(side="left")
-        ttk.Button(a, text="Choose files", command=self.pick_files).pack(side="left", padx=(6,0))
-        b = ttk.LabelFrame(frame, text="Output folder", padding=10); b.pack(fill="x", pady=5)
-        ttk.Entry(b, textvariable=self.output).pack(side="left", fill="x", expand=True, padx=(0,8))
-        ttk.Button(b, text="Browse", command=self.pick_output).pack(side="left")
+        # E-PIX BG STUDIO dashboard inspired by the supplied reference.
+        bg = "#111214"
+        panel = "#202226"
+        silver = "#c9cbd0"
+        accent = "#6f91b7"
+        self.root.configure(bg=bg)
+
+        shell = tk.Frame(self.root, bg=bg)
+        shell.pack(fill="both", expand=True)
+
+        sidebar = tk.Frame(shell, bg=panel, width=205, highlightthickness=1,
+                           highlightbackground="#59606b")
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+
+        def nav_button(icon, title, command):
+            item = tk.Frame(sidebar, bg=panel, cursor="hand2")
+            item.pack(fill="x", padx=8, pady=(24, 8))
+            ico = tk.Label(item, text=icon, font=("Segoe UI Symbol", 38),
+                           fg="#d5d7dc", bg=panel, cursor="hand2")
+            ico.pack(pady=(3, 0))
+            txt = tk.Label(item, text=title, font=("Segoe UI", 13),
+                           fg="#e1e2e5", bg=panel, cursor="hand2")
+            txt.pack(pady=(0, 4))
+            for widget in (item, ico, txt):
+                widget.bind("<Button-1>", lambda _e, fn=command: fn())
+                widget.bind("<Enter>", lambda _e, w=item: w.configure(bg="#30343b"))
+                widget.bind("<Leave>", lambda _e, w=item: w.configure(bg=panel))
+            return item
+
+        nav_button("▰", "Choose Folder", self.pick_folder)
+        nav_button("▣", "Choose Photo", self.pick_files)
+        nav_button("⇧", "Output Folder", self.pick_output)
+
+        main = tk.Frame(shell, bg=bg)
+        main.pack(side="left", fill="both", expand=True)
+
+        # Center branding
+        brand = tk.Frame(main, bg=bg)
+        brand.place(relx=0.5, rely=0.43, anchor="center")
+        logo = tk.Label(brand, text="▣", font=("Segoe UI Symbol", 58, "bold"),
+                        fg="#d5d7dc", bg="#33363b", width=3, height=1,
+                        relief="ridge", bd=4)
+        logo.pack(pady=(0, 18))
+        tk.Label(brand, text="E - PIX", font=("Segoe UI", 42, "bold"),
+                 fg="#e4e4e6", bg=bg).pack()
+        tk.Label(brand, text="B G   S T U D I O", font=("Segoe UI Light", 20),
+                 fg="#c6c7ca", bg=bg).pack(pady=(0, 14))
+
+        self.selection_label = tk.Label(main, text="Choose a folder or individual photos",
+                 font=("Segoe UI", 10), fg="#9da3ad", bg=bg)
+        self.selection_label.place(relx=0.5, rely=0.68, anchor="center")
+
+        self.go = tk.Button(main, text="START", command=self.start,
+                 font=("Segoe UI", 20, "bold"), fg="#e6e7e9", bg="#45484e",
+                 activebackground="#5a6069", activeforeground="white",
+                 relief="ridge", bd=4, padx=28, pady=8, cursor="hand2")
+        self.go.place(relx=0.5, rely=0.79, anchor="center")
+
+        footer = tk.Frame(main, bg=bg)
+        footer.pack(side="bottom", fill="x", padx=22, pady=16)
+        self.progress = ttk.Progressbar(footer, mode="determinate")
+        self.progress.pack(fill="x", pady=(0, 7))
+        self.status_label = tk.Label(footer, textvariable=self.status,
+                 font=("Segoe UI", 9), fg="#c4c7cc", bg=bg, anchor="w")
+        self.status_label.pack(fill="x")
+        self.log = tk.Text(main, height=4, state="disabled", wrap="word",
+                 bg="#191b1f", fg="#d5d8de", insertbackground="white",
+                 relief="flat", font=("Consolas", 9))
+        self.log.pack(side="bottom", fill="x", padx=22, pady=(0, 4))
+
         self.recursive = tk.BooleanVar(value=False)
-        ttk.Checkbutton(frame, text="Include subfolders", variable=self.recursive).pack(anchor="w", pady=(8,2))
-        ttk.Label(frame, text="Originals are never changed. Existing output files are never overwritten.",
-                  foreground="#555").pack(anchor="w", pady=(2,10))
-        self.progress = ttk.Progressbar(frame, mode="determinate"); self.progress.pack(fill="x", pady=4)
-        ttk.Label(frame, textvariable=self.status).pack(anchor="w")
-        self.log = tk.Text(frame, height=8, state="disabled", wrap="word"); self.log.pack(fill="both", expand=True, pady=8)
-        self.go = ttk.Button(frame, text="Start background removal", command=self.start); self.go.pack(anchor="e")
+        # Keep the advanced option accessible without cluttering the main design.
+        tk.Checkbutton(main, text="Include subfolders", variable=self.recursive,
+                 bg=bg, fg="#aeb4bd", selectcolor="#25282d", activebackground=bg,
+                 activeforeground="white", font=("Segoe UI", 9)).place(
+                 relx=0.5, rely=0.73, anchor="center")
 
     def pick_folder(self):
         p = filedialog.askdirectory(title="Select source photo folder")
-        if p: self.source.set(p); self.selected = []
+        if p:
+            self.source.set(p); self.selected = []
+            self.selection_label.configure(text="Source folder: " + p)
 
     def pick_files(self):
         p = filedialog.askopenfilenames(title="Select photos", filetypes=[("Images","*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff")])
-        if p: self.selected = list(p); self.source.set(f"{len(p)} photos selected")
+        if p:
+            self.selected = list(p); self.source.set(f"{len(p)} photos selected")
+            self.selection_label.configure(text=f"{len(p)} photo(s) selected")
 
     def pick_output(self):
         p = filedialog.askdirectory(title="Select output folder")
-        if p: self.output.set(p)
+        if p:
+            self.output.set(p)
+            self.say("Output folder: " + p)
+            self.status.set("Output folder selected.")
 
     def say(self, message):
         self.log.configure(state="normal"); self.log.insert("end", message + "\n")
