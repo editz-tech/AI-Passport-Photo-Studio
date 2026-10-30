@@ -73,6 +73,7 @@ class App:
                  relief="flat", font=("Consolas", 9))
         self.progress = ttk.Progressbar(self.root, mode="determinate")
         self.progress_value = 0
+        self.start_enabled = True
         self.draw_dashboard()
 
     def draw_dashboard(self, event=None):
@@ -113,8 +114,8 @@ class App:
         c.create_text(cx, int(h*.535), text="B G   S T U D I O", fill="#c6c2c4",
                       font=("Segoe UI Light", 21))
         self._metal_button(c, cx-92, int(h*.855)-44, cx+92, int(h*.855)+44)
-        c.create_text(cx, int(h*.855), text="START", fill="#e0dfe0",
-                      font=("Segoe UI Light", 27))
+        c.create_text(cx, int(h*.855), text=("START" if self.start_enabled else "PROCESSING..."),
+                      fill="#e0dfe0", font=("Segoe UI Light", 23 if not self.start_enabled else 27))
         # Separate right-side live processing area.
         px = design_w + 20
         c.create_rectangle(design_w, 0, w, h, fill="#17191d", outline="#555b64", width=2)
@@ -223,18 +224,33 @@ class App:
         return [x for x in it if x.is_file() and x.suffix.lower() in EXTS]
 
     def start(self):
-        if self.busy: return
+        if self.busy:
+            return
         if not self.output.get().strip():
-            messagebox.showerror(APP_NAME, "Choose an output folder first."); return
+            messagebox.showerror(APP_NAME, "Choose an output folder first.")
+            self.say("START cancelled: select an output folder.")
+            return
         paths = self.inputs()
         if not paths:
-            messagebox.showwarning(APP_NAME, "Choose a source folder or image files."); return
-        out = Path(self.output.get()); out.mkdir(parents=True, exist_ok=True)
-        self.busy = True; self.go.configure(state="disabled")
+            messagebox.showwarning(APP_NAME, "Choose a source folder or image files.")
+            self.say("START cancelled: no supported photos found in the selected source.")
+            return
+        try:
+            out = Path(self.output.get())
+            out.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            messagebox.showerror(APP_NAME, f"Cannot create output folder: {e}")
+            self.say(f"Output folder error: {e}")
+            return
+
+        self.busy = True
+        self.start_enabled = False
+        self.status.set(f"Starting AI model for {len(paths)} photo(s)...")
+        self.say(f"START clicked. Queued {len(paths)} photo(s). Loading AI model...")
         self.progress.configure(maximum=len(paths), value=0)
         self.progress_value = 0
         self.draw_dashboard()
-        threading.Thread(target=self.process, args=(paths,out), daemon=True).start()
+        threading.Thread(target=self.process, args=(paths, out), daemon=True).start()
 
     def process(self, paths, out):
         good = bad = 0
@@ -276,7 +292,8 @@ class App:
         self.root.after(0, self.done, good, bad)
 
     def done(self, good, bad):
-        self.busy = False; self.go.configure(state="normal")
+        self.busy = False
+        self.start_enabled = True
         self.status.set(f"Finished • Successful: {good} • Errors: {bad}")
         self.progress_value = 100 if bad == 0 else self.progress_value
         self.draw_dashboard()
