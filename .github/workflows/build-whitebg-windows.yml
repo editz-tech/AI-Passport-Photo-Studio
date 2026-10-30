@@ -36,7 +36,7 @@ jobs:
         run: |
           python -c "from rembg import new_session; new_session('u2netp')"
           New-Item -ItemType Directory -Force .u2net | Out-Null
-          Copy-Item "$env:USERPROFILE\.u2net\u2netp.onnx" ".u2net\u2netp.onnx"
+          Copy-Item "$env:USERPROFILE\.rembg\models\u2netp\u2netp.onnx" ".u2net\u2netp.onnx"
           if (!(Test-Path ".u2net\u2netp.onnx")) { throw "AI model was not downloaded." }
       - name: Build Windows executable
         working-directory: WhiteBGStudio
