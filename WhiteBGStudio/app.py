@@ -255,7 +255,7 @@ class App:
     def process(self, paths, out):
         good = bad = 0
         try:
-            session = new_session("u2net")
+            session = new_session("u2netp")
         except Exception as e:
             self.root.after(0, self.say, "AI model error: " + str(e))
             self.root.after(0, self.done, 0, len(paths)); return
@@ -263,16 +263,9 @@ class App:
             try:
                 with Image.open(src) as im:
                     im = ImageOps.exif_transpose(im).convert("RGBA")
-                # Alpha matting improves fine hair and removes more of the original
-                # background fringe than the default binary-ish mask.
-                result = remove(
-                    im,
-                    session=session,
-                    alpha_matting=True,
-                    alpha_matting_foreground_threshold=250,
-                    alpha_matting_background_threshold=20,
-                    alpha_matting_erode_size=20,
-                ).convert("RGBA")
+                # Fast mode: the lightweight U2-NetP model plus a single-pass
+                # segmentation avoids the expensive per-photo alpha-matting pass.
+                result = remove(im, session=session, alpha_matting=False).convert("RGBA")
                 result = clean_mask_and_defringe(result)
                 # Ensure the final canvas is genuinely pure white.
                 white = Image.new("RGBA", result.size, (255,255,255,255))
@@ -281,7 +274,7 @@ class App:
                 n = 1
                 while dest.exists():
                     dest = out / f"{src.stem}_{n}.jpg"; n += 1
-                white.convert("RGB").save(dest, "JPEG", quality=95, optimize=True)
+                white.convert("RGB").save(dest, "JPEG", quality=92, optimize=False)
                 good += 1; self.root.after(0, self.say, "Saved: " + dest.name)
             except Exception as e:
                 bad += 1; self.root.after(0, self.say, f"ERROR {src.name}: {e}")
