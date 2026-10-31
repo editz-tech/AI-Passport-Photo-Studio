@@ -19,32 +19,13 @@ APP_NAME = "WhiteBG Studio"
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 
 def clean_mask_and_defringe(result):
-    """Suppress the old-background fringe while retaining antialiased subject edges."""
-    rgba = result.convert("RGBA")
-    alpha = rgba.getchannel("A")
+    """Keep fine alpha detail, especially individual hair strands.
 
-    # U2-NetP can leave a pale halo where a warm wall meets dark hair or clothing.
-    # First remove low-confidence mask pixels, then contract the confident mask
-    # slightly before feathering. This avoids carrying a wide strip of the old wall.
-    alpha = alpha.point(lambda a: 0 if a < 105 else (255 if a > 185 else int((a - 105) * 255 / 80)))
-    alpha = alpha.filter(ImageFilter.MinFilter(13))
-    alpha = alpha.filter(ImageFilter.GaussianBlur(0.65))
-
-    arr = np.asarray(rgba).astype(np.float32)
-    a = np.asarray(alpha).astype(np.float32) / 255.0
-    rgb = arr[:, :, :3]
-
-    # Neutralize residual warm/grey background color on partially covered edge
-    # pixels. Fully opaque face, hair and clothing pixels remain unchanged.
-    edge = (a > 0.01) & (a < 0.995)
-    if np.any(edge):
-        strength = np.zeros_like(a)
-        strength[edge] = np.clip((0.995 - a[edge]) / 0.995, 0, 1) * 0.92
-        rgb[edge] = rgb[edge] * (1.0 - strength[edge, None]) + 255.0 * strength[edge, None]
-
-    arr[:, :, :3] = np.clip(rgb, 0, 255)
-    arr[:, :, 3] = a * 255.0
-    return Image.fromarray(arr.astype(np.uint8), "RGBA")
+    Do not threshold, shrink, or erode the mask: those operations remove
+    flyaway hair and make the head/hairline look smaller than the original.
+    Alpha matting is performed during segmentation instead.
+    """
+    return result.convert("RGBA")
 
 class App:
     def __init__(self, root):
@@ -259,7 +240,7 @@ class App:
     def process(self, paths, out):
         good = bad = 0
         try:
-            session = new_session("u2netp")
+            session = new_session("u2net")
         except Exception as e:
             self.root.after(0, self.say, "AI model error: " + str(e))
             self.root.after(0, self.done, 0, len(paths)); return
@@ -267,9 +248,16 @@ class App:
             try:
                 with Image.open(src) as im:
                     im = ImageOps.exif_transpose(im).convert("RGBA")
-                # Fast mode: the lightweight U2-NetP model plus a single-pass
-                # segmentation avoids the expensive per-photo alpha-matting pass.
-                result = remove(im, session=session, alpha_matting=False).convert("RGBA")
+                # High-detail mode: full U2-Net plus alpha matting preserves fine
+                # hair edges. Never erode or hard-threshold the subject mask.
+                result = remove(
+                    im,
+                    session=session,
+                    alpha_matting=True,
+                    alpha_matting_foreground_threshold=240,
+                    alpha_matting_background_threshold=10,
+                    alpha_matting_erode_size=10,
+                ).convert("RGBA")
                 result = clean_mask_and_defringe(result)
                 # Ensure the final canvas is genuinely pure white.
                 white = Image.new("RGBA", result.size, (255,255,255,255))
