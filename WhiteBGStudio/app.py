@@ -19,28 +19,32 @@ APP_NAME = "WhiteBG Studio"
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 
 def clean_mask_and_defringe(result):
-    """Reduce background-colored edge halos before compositing onto white."""
+    """Suppress the old-background fringe while retaining antialiased subject edges."""
     rgba = result.convert("RGBA")
     alpha = rgba.getchannel("A")
-    # Remove faint semi-transparent shadow/fringe pixels and contract the
-    # segmentation by a tiny amount, then keep a slight antialias transition.
-    alpha = alpha.point(lambda a: 0 if a < 90 else (255 if a > 210 else int((a - 90) * 255 / 120)))
-    # Contract the mask more decisively so broad ear/neck/shoulder halos are
-    # excluded instead of being carried onto the white canvas.
-    alpha = alpha.filter(ImageFilter.MinFilter(9)).filter(ImageFilter.GaussianBlur(0.35))
+
+    # U2-NetP can leave a pale halo where a warm wall meets dark hair or clothing.
+    # First remove low-confidence mask pixels, then contract the confident mask
+    # slightly before feathering. This avoids carrying a wide strip of the old wall.
+    alpha = alpha.point(lambda a: 0 if a < 105 else (255 if a > 185 else int((a - 105) * 255 / 80)))
+    alpha = alpha.filter(ImageFilter.MinFilter(13))
+    alpha = alpha.filter(ImageFilter.GaussianBlur(0.65))
+
     arr = np.asarray(rgba).astype(np.float32)
     a = np.asarray(alpha).astype(np.float32) / 255.0
     rgb = arr[:, :, :3]
-    # Brighten only boundary pixels to neutralize brown/grey contamination
-    # left by the old background; keep fully opaque face/clothing pixels intact.
-    edge = (a > 0.01) & (a < 0.98)
+
+    # Neutralize residual warm/grey background color on partially covered edge
+    # pixels. Fully opaque face, hair and clothing pixels remain unchanged.
+    edge = (a > 0.01) & (a < 0.995)
     if np.any(edge):
-        strength = ((0.98 - a) / 0.98 * 0.72)
+        strength = np.zeros_like(a)
+        strength[edge] = np.clip((0.995 - a[edge]) / 0.995, 0, 1) * 0.92
         rgb[edge] = rgb[edge] * (1.0 - strength[edge, None]) + 255.0 * strength[edge, None]
+
     arr[:, :, :3] = np.clip(rgb, 0, 255)
     arr[:, :, 3] = a * 255.0
     return Image.fromarray(arr.astype(np.uint8), "RGBA")
-
 
 class App:
     def __init__(self, root):
