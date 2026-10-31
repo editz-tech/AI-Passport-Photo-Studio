@@ -1,9 +1,10 @@
-import os, sys, threading
+import os, sys, threading, time
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageOps, ImageFilter
 import numpy as np
+import onnxruntime as ort
 
 # Use the bundled model when packaged, enabling offline processing after installation.
 def resource_path(relative):
@@ -240,11 +241,38 @@ class App:
     def process(self, paths, out):
         good = bad = 0
         try:
-            session = new_session("u2net")
+            # Prefer DirectML GPU acceleration on compatible Windows PCs while
+            # retaining full-detail U2-Net and a CPU fallback.
+            available = ort.get_available_providers()
+            if "DmlExecutionProvider" in available:
+                opts = ort.SessionOptions()
+                opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+                opts.enable_mem_pattern = False
+                session = new_session(
+                    "u2net",
+                    providers=["DmlExecutionProvider", "CPUExecutionProvider"],
+                    sess_opts=opts,
+                )
+                device = "DirectML GPU"
+            else:
+                opts = ort.SessionOptions()
+                opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                opts.intra_op_num_threads = max(2, min(8, (os.cpu_count() or 4) - 1))
+                opts.inter_op_num_threads = 1
+                session = new_session(
+                    "u2net",
+                    providers=["CPUExecutionProvider"],
+                    sess_opts=opts,
+                )
+                device = f"CPU ({opts.intra_op_num_threads} threads)"
+            self.root.after(0, self.say, f"AI device: {device} • Full-detail U2-Net • quality-preserving matte")
         except Exception as e:
             self.root.after(0, self.say, "AI model error: " + str(e))
             self.root.after(0, self.done, 0, len(paths)); return
+        batch_started = time.perf_counter()
         for i, src in enumerate(paths, 1):
+            image_started = time.perf_counter()
             try:
                 with Image.open(src) as im:
                     im = ImageOps.exif_transpose(im).convert("RGBA")
@@ -266,14 +294,27 @@ class App:
                 n = 1
                 while dest.exists():
                     dest = out / f"{src.stem}_{n}.jpg"; n += 1
-                white.convert("RGB").save(dest, "JPEG", quality=92, optimize=False)
-                good += 1; self.root.after(0, self.say, "Saved: " + dest.name)
+                white.convert("RGB").save(
+                    dest, "JPEG", quality=95, subsampling=0, optimize=False
+                )
+                good += 1
+                elapsed = max(time.perf_counter() - batch_started, 0.001)
+                rate = good * 60.0 / elapsed
+                self.root.after(
+                    0, self.say,
+                    f"Saved: {dest.name} • {time.perf_counter()-image_started:.1f}s • {rate:.1f} photos/min average"
+                )
             except Exception as e:
                 bad += 1; self.root.after(0, self.say, f"ERROR {src.name}: {e}")
             self.root.after(0, self.progress.configure, {"value": i})
             self.root.after(0, setattr, self, "progress_value", int(i * 100 / len(paths)))
             self.root.after(0, self.draw_dashboard)
-            self.root.after(0, self.status.set, f"Processed {i} of {len(paths)}")
+            elapsed = max(time.perf_counter() - batch_started, 0.001)
+            rate = (good + bad) * 60.0 / elapsed
+            self.root.after(
+                0, self.status.set,
+                f"Processed {i} of {len(paths)} • {rate:.1f} photos/min"
+            )
         self.root.after(0, self.done, good, bad)
 
     def done(self, good, bad):
