@@ -37,11 +37,11 @@ jobs:
           New-Item -ItemType Directory -Force .u2net | Out-Null
           $env:U2NET_HOME = "$PWD\.u2net"
           python -c "from rembg import new_session; new_session('u2net')"
-          if (!(Test-Path ".u2net\u2net.onnx")) { throw "Full-detail U2-Net model was not downloaded." }
+          if (!(Test-Path ".u2net\models\u2net\u2net.onnx")) { throw "Full-detail U2-Net model was not downloaded to the expected rembg cache path." }
       - name: Build Windows executable
         working-directory: WhiteBGStudio
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --name "WhiteBG Studio" --icon "e-pix-icon.ico" --collect-all rembg --collect-all onnxruntime --copy-metadata pymatting --copy-metadata rembg --copy-metadata pooch --copy-metadata scikit-image --add-data ".u2net\u2net.onnx;.u2net" app.py
+          pyinstaller --noconfirm --clean --onefile --windowed --name "WhiteBG Studio" --icon "e-pix-icon.ico" --collect-all rembg --collect-all onnxruntime --copy-metadata pymatting --copy-metadata rembg --copy-metadata pooch --copy-metadata scikit-image --add-data ".u2net;.u2net" app.py
       - name: Package executable
         shell: pwsh
         run: |
