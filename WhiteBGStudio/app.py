@@ -1,4 +1,4 @@
-import os, sys, threading, time
+import os, sys, threading, time, queue
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -64,7 +64,9 @@ class App:
         self.status = tk.StringVar(value="Choose photos or a source folder to begin.")
         self.selected = []
         self.busy = False
+        self.ui_queue = queue.Queue()
         self.build()
+        self.root.after(100, self._poll_ui_queue)
 
     def build(self):
         # Fixed-proportion E-PIX layout: supplied design language on the left,
@@ -262,75 +264,93 @@ class App:
         self.draw_dashboard()
         threading.Thread(target=self.process, args=(paths, out), daemon=True).start()
 
+    def _poll_ui_queue(self):
+        """Apply worker messages only on Tk's main thread; never touch Tk from worker."""
+        try:
+            while True:
+                kind, payload = self.ui_queue.get_nowait()
+                if kind == "log":
+                    self.say(payload)
+                elif kind == "status":
+                    self.status.set(payload)
+                    self.draw_dashboard()
+                elif kind == "progress":
+                    current, total = payload
+                    self.progress.configure(maximum=total, value=current)
+                    self.progress_value = int(current * 100 / max(total, 1))
+                    self.draw_dashboard()
+                elif kind == "done":
+                    self.done(*payload)
+        except queue.Empty:
+            pass
+        self.root.after(100, self._poll_ui_queue)
+
     def process(self, paths, out):
+        """Background-only worker. It must never call Tkinter methods or root.after()."""
         good = bad = 0
         try:
-            # Prefer DirectML GPU acceleration on compatible Windows PCs while
-            # retaining full-detail U2-Net and a CPU fallback.
             available = ort.get_available_providers()
-            if "DmlExecutionProvider" in available:
-                opts = ort.SessionOptions()
-                opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-                opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-                opts.enable_mem_pattern = False
-                model_file = resource_path(os.path.join(".u2net", "u2net.onnx"))
-                session = ort.InferenceSession(
-                    model_file, sess_options=opts,
-                    providers=["DmlExecutionProvider", "CPUExecutionProvider"],
-                )
-                device = "DirectML GPU"
-            else:
-                opts = ort.SessionOptions()
-                opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-                opts.intra_op_num_threads = max(2, min(8, (os.cpu_count() or 4) - 1))
-                opts.inter_op_num_threads = 1
-                model_file = resource_path(os.path.join(".u2net", "u2net.onnx"))
-                session = ort.InferenceSession(
-                    model_file, sess_options=opts, providers=["CPUExecutionProvider"]
-                )
-                device = f"CPU ({opts.intra_op_num_threads} threads)"
-            self.root.after(0, self.say, f"AI device: {device} • Full-detail U2-Net • quality-preserving matte")
+            opts = ort.SessionOptions()
+            opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+            opts.intra_op_num_threads = max(2, min(8, (os.cpu_count() or 4) - 1))
+            opts.inter_op_num_threads = 1
+            model_file = resource_path(os.path.join(".u2net", "u2net.onnx"))
+
+            # Intel Iris Xe can expose DirectML, but CPU execution is more reliable
+            # than an unsupported/stalled DirectML graph on some driver versions.
+            # Prefer DirectML only when explicitly enabled by the user in a future
+            # validated build; default to optimized ONNX CPU execution.
+            session = ort.InferenceSession(
+                model_file,
+                sess_options=opts,
+                providers=["CPUExecutionProvider"],
+            )
+            device = f"ONNX Runtime CPU ({opts.intra_op_num_threads} threads)"
+            self.ui_queue.put(("log", f"AI device: {device} • U2-Net • preserving original image dimensions"))
+            self.ui_queue.put(("status", f"AI model ready. Processing {len(paths)} photo(s)..."))
         except Exception as e:
-            self.root.after(0, self.say, "AI model error: " + str(e))
-            self.root.after(0, self.done, 0, len(paths)); return
+            self.ui_queue.put(("log", "AI model error: " + str(e)))
+            self.ui_queue.put(("done", (0, len(paths))))
+            return
+
         batch_started = time.perf_counter()
         for i, src in enumerate(paths, 1):
             image_started = time.perf_counter()
             try:
                 with Image.open(src) as im:
                     im = ImageOps.exif_transpose(im).convert("RGBA")
-                # Full-resolution soft alpha from direct U2-Net inference.
-                result = remove_background(im, session).convert("RGBA")
-                result = clean_mask_and_defringe(result)
-                # Ensure the final canvas is genuinely pure white.
-                white = Image.new("RGBA", result.size, (255,255,255,255))
+                result = clean_mask_and_defringe(remove_background(im, session))
+                white = Image.new("RGBA", result.size, (255, 255, 255, 255))
                 white.alpha_composite(result)
                 dest = out / (src.stem + ".jpg")
                 n = 1
                 while dest.exists():
-                    dest = out / f"{src.stem}_{n}.jpg"; n += 1
+                    dest = out / f"{src.stem}_{n}.jpg"
+                    n += 1
                 white.convert("RGB").save(
                     dest, "JPEG", quality=95, subsampling=0, optimize=False
                 )
                 good += 1
                 elapsed = max(time.perf_counter() - batch_started, 0.001)
                 rate = good * 60.0 / elapsed
-                self.root.after(
-                    0, self.say,
+                self.ui_queue.put((
+                    "log",
                     f"Saved: {dest.name} • {time.perf_counter()-image_started:.1f}s • {rate:.1f} photos/min average"
-                )
+                ))
             except Exception as e:
-                bad += 1; self.root.after(0, self.say, f"ERROR {src.name}: {e}")
-            self.root.after(0, self.progress.configure, {"value": i})
-            self.root.after(0, setattr, self, "progress_value", int(i * 100 / len(paths)))
-            self.root.after(0, self.draw_dashboard)
+                bad += 1
+                self.ui_queue.put(("log", f"ERROR {src.name}: {e}"))
+
+            self.ui_queue.put(("progress", (i, len(paths))))
             elapsed = max(time.perf_counter() - batch_started, 0.001)
             rate = (good + bad) * 60.0 / elapsed
-            self.root.after(
-                0, self.status.set,
+            self.ui_queue.put((
+                "status",
                 f"Processed {i} of {len(paths)} • {rate:.1f} photos/min"
-            )
-        self.root.after(0, self.done, good, bad)
+            ))
+
+        self.ui_queue.put(("done", (good, bad)))
 
     def done(self, good, bad):
         self.busy = False
