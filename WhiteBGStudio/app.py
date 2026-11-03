@@ -2,7 +2,8 @@ import os, sys, threading, time
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageOps, ImageFilter
+from PIL import Image, ImageOps
+import numpy as np
 import onnxruntime as ort
 
 # Use the bundled model when packaged, enabling offline processing after installation.
@@ -13,10 +14,34 @@ bundled_model = resource_path(".u2net")
 if os.path.isdir(bundled_model):
     os.environ["U2NET_HOME"] = bundled_model
 
-from rembg import remove, new_session
 
 APP_NAME = "WhiteBG Studio"
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
+
+def remove_background(image, session):
+    """Run U2-Net directly through ONNX Runtime; do not import rembg/PyMatting/Numba."""
+    original = image.convert("RGBA")
+    rgb = original.convert("RGB")
+    original_size = rgb.size
+    model_image = rgb.resize((320, 320), Image.Resampling.BILINEAR)
+    arr = np.asarray(model_image, dtype=np.float32) / 255.0
+    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+    arr = (arr - mean) / std
+    tensor = np.transpose(arr, (2, 0, 1))[None, ...].astype(np.float32)
+    input_name = session.get_inputs()[0].name
+    outputs = session.run(None, {input_name: tensor})
+    mask = np.asarray(outputs[0][0][0], dtype=np.float32)
+    low, high = float(mask.min()), float(mask.max())
+    if high > low:
+        mask = (mask - low) / (high - low)
+    else:
+        mask = np.zeros_like(mask)
+    mask_img = Image.fromarray(np.clip(mask * 255.0, 0, 255).astype(np.uint8), mode="L")
+    mask_img = mask_img.resize(original_size, Image.Resampling.LANCZOS)
+    foreground = original.copy()
+    foreground.putalpha(mask_img)
+    return foreground
 
 def clean_mask_and_defringe(result):
     """Keep fine alpha detail, especially individual hair strands.
@@ -248,10 +273,10 @@ class App:
                 opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
                 opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
                 opts.enable_mem_pattern = False
-                session = new_session(
-                    "u2net",
+                model_file = resource_path(os.path.join(".u2net", "u2net.onnx"))
+                session = ort.InferenceSession(
+                    model_file, sess_options=opts,
                     providers=["DmlExecutionProvider", "CPUExecutionProvider"],
-                    sess_opts=opts,
                 )
                 device = "DirectML GPU"
             else:
@@ -259,10 +284,9 @@ class App:
                 opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
                 opts.intra_op_num_threads = max(2, min(8, (os.cpu_count() or 4) - 1))
                 opts.inter_op_num_threads = 1
-                session = new_session(
-                    "u2net",
-                    providers=["CPUExecutionProvider"],
-                    sess_opts=opts,
+                model_file = resource_path(os.path.join(".u2net", "u2net.onnx"))
+                session = ort.InferenceSession(
+                    model_file, sess_options=opts, providers=["CPUExecutionProvider"]
                 )
                 device = f"CPU ({opts.intra_op_num_threads} threads)"
             self.root.after(0, self.say, f"AI device: {device} • Full-detail U2-Net • quality-preserving matte")
@@ -275,16 +299,8 @@ class App:
             try:
                 with Image.open(src) as im:
                     im = ImageOps.exif_transpose(im).convert("RGBA")
-                # High-detail mode: full U2-Net plus alpha matting preserves fine
-                # hair edges. Never erode or hard-threshold the subject mask.
-                result = remove(
-                    im,
-                    session=session,
-                    # Avoid PyMatting/Numba's optional compiled acceleration DLLs.
-                    # U2-Net still produces a soft full-resolution alpha mask; this
-                    # keeps hair detail without triggering the blocked Numba DLL.
-                    alpha_matting=False,
-                ).convert("RGBA")
+                # Full-resolution soft alpha from direct U2-Net inference.
+                result = remove_background(im, session).convert("RGBA")
                 result = clean_mask_and_defringe(result)
                 # Ensure the final canvas is genuinely pure white.
                 white = Image.new("RGBA", result.size, (255,255,255,255))
