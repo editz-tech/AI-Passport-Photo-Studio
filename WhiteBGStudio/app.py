@@ -3,7 +3,6 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageOps, ImageFilter
-import numpy as np
 import onnxruntime as ort
 
 # Use the bundled model when packaged, enabling offline processing after installation.
@@ -281,10 +280,10 @@ class App:
                 result = remove(
                     im,
                     session=session,
-                    alpha_matting=True,
-                    alpha_matting_foreground_threshold=240,
-                    alpha_matting_background_threshold=10,
-                    alpha_matting_erode_size=10,
+                    # Avoid PyMatting/Numba's optional compiled acceleration DLLs.
+                    # U2-Net still produces a soft full-resolution alpha mask; this
+                    # keeps hair detail without triggering the blocked Numba DLL.
+                    alpha_matting=False,
                 ).convert("RGBA")
                 result = clean_mask_and_defringe(result)
                 # Ensure the final canvas is genuinely pure white.
