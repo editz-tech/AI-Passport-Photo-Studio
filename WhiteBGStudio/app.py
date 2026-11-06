@@ -2,7 +2,7 @@ import os, sys, threading, time, queue
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageOps, ImageTk
+from PIL import Image, ImageOps
 import numpy as np
 import onnxruntime as ort
 
@@ -56,6 +56,11 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title(APP_NAME)
+        # Use the E-PIX application icon in the Windows title bar (replaces Tk default icon).
+        try:
+            root.iconbitmap(resource_path("e-pix-icon.ico"))
+        except tk.TclError:
+            pass
         root.geometry("1510x900")
         root.minsize(1200, 760)
         root.configure(bg="#08090b")
@@ -75,9 +80,6 @@ class App:
         self.panel = "#202226"
         self.canvas = tk.Canvas(self.root, bg=self.bg, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
-        logo_path = resource_path("e-pix-logo.jpg")
-        with Image.open(logo_path) as logo:
-            self.brand_logo = ImageTk.PhotoImage(logo.copy())
         self.canvas.bind("<Configure>", self.draw_dashboard)
         self.canvas.bind("<Button-1>", self.dashboard_click)
         self.source_display = ""
@@ -109,8 +111,7 @@ class App:
             c.create_line(3, y, side_w-3, y, fill=col, width=1)
         # Main charcoal vignette effect.
         c.create_rectangle(side_w+2, 0, design_w, h, fill="#101113", outline="")
-        # User-supplied E-PIX logo at the upper-left of the dashboard.
-        c.create_image(side_w//2, 105, image=self.brand_logo, anchor="center")
+        # Keep the sidebar clean: no large logo image or its black rectangular background.
         # Sidebar actions sit below the logo with clear spacing.
         self._draw_folder_icon(c, 100, int(h*.31))
         c.create_text(100, int(h*.375), text="Choose Folder", fill="#d8d6d7",
