@@ -1,4 +1,4 @@
-name: Build WhiteBG Studio for Windows
+name: Build E-PIX BG STUDIO for Windows
 
 on:
   push:
@@ -40,8 +40,8 @@ jobs:
       - name: Build Windows executable
         working-directory: WhiteBGStudio
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --name "WhiteBG Studio" --icon "e-pix-icon.ico" --collect-all onnxruntime --hidden-import numpy --add-data ".u2net;.u2net" app.py
-      - name: Digitally sign executable (when certificate is configured)
+          pyinstaller --noconfirm --clean --onefile --windowed --name "E-PIX BG STUDIO" --icon "e-pix-icon.ico" --collect-all onnxruntime --hidden-import numpy --add-data ".u2net;.u2net" app.py
+      - name: Require trusted Authenticode signing
         working-directory: WhiteBGStudio
         shell: pwsh
         env:
@@ -49,10 +49,9 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
-            Write-Warning "No trusted code-signing certificate configured. The EXE will remain unsigned; Smart App Control may continue to block it."
-            exit 0
+            throw "Trusted code-signing certificate secrets are missing. Add WINDOWS_CERTIFICATE_BASE64 and WINDOWS_CERTIFICATE_PASSWORD in repository Settings > Secrets and variables > Actions."
           }
-          $certPath = Join-Path $env:RUNNER_TEMP "whitebg-signing.pfx"
+          $certPath = Join-Path $env:RUNNER_TEMP "epix-signing.pfx"
           [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
           try {
             $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
@@ -60,11 +59,11 @@ jobs:
               Sort-Object FullName -Descending |
               Select-Object -First 1
             if (-not $signtool) { throw "Windows SDK signtool.exe was not found." }
-            & $signtool.FullName sign /fd SHA256 /td SHA256 /tr "http://timestamp.digicert.com" /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD "dist\WhiteBG Studio.exe"
+            & $signtool.FullName sign /fd SHA256 /td SHA256 /tr "http://timestamp.digicert.com" /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD "dist\E-PIX BG STUDIO.exe"
             if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed with exit code $LASTEXITCODE." }
-            & $signtool.FullName verify /pa /v "dist\WhiteBG Studio.exe"
+            & $signtool.FullName verify /pa /v "dist\E-PIX BG STUDIO.exe"
             if ($LASTEXITCODE -ne 0) { throw "Authenticode signature verification failed." }
-            Write-Host "Executable signed and signature verified."
+            Write-Host "E-PIX BG STUDIO executable signed and signature verified."
           }
           finally {
             Remove-Item $certPath -Force -ErrorAction SilentlyContinue
@@ -73,12 +72,12 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force release | Out-Null
-          Copy-Item "WhiteBGStudio\dist\WhiteBG Studio.exe" "release\WhiteBG Studio.exe"
+          Copy-Item "WhiteBGStudio\dist\E-PIX BG STUDIO.exe" "release\E-PIX BG STUDIO.exe"
           Copy-Item "WhiteBGStudio\README.txt" "release\README.txt"
-          Compress-Archive -Path "release\*" -DestinationPath "WhiteBGStudio-Windows.zip" -Force
+          Compress-Archive -Path "release\*" -DestinationPath "E-PIX-BG-STUDIO-Windows.zip" -Force
       - uses: actions/upload-artifact@v4
         with:
-          name: WhiteBGStudio-Windows
-          path: WhiteBGStudio-Windows.zip
+          name: E-PIX-BG-STUDIO-Windows
+          path: E-PIX-BG-STUDIO-Windows.zip
           if-no-files-found: error
           retention-days: 14
