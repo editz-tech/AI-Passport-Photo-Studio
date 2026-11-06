@@ -41,6 +41,34 @@ jobs:
         working-directory: WhiteBGStudio
         run: |
           pyinstaller --noconfirm --clean --onefile --windowed --name "WhiteBG Studio" --icon "e-pix-icon.ico" --collect-all onnxruntime --hidden-import numpy --add-data ".u2net;.u2net" app.py
+      - name: Digitally sign executable (when certificate is configured)
+        working-directory: WhiteBGStudio
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            Write-Warning "No trusted code-signing certificate configured. The EXE will remain unsigned; Smart App Control may continue to block it."
+            exit 0
+          }
+          $certPath = Join-Path $env:RUNNER_TEMP "whitebg-signing.pfx"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          try {
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+              Where-Object { $_.FullName -match "\\x64\\signtool.exe$" } |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+            if (-not $signtool) { throw "Windows SDK signtool.exe was not found." }
+            & $signtool.FullName sign /fd SHA256 /td SHA256 /tr "http://timestamp.digicert.com" /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD "dist\WhiteBG Studio.exe"
+            if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed with exit code $LASTEXITCODE." }
+            & $signtool.FullName verify /pa /v "dist\WhiteBG Studio.exe"
+            if ($LASTEXITCODE -ne 0) { throw "Authenticode signature verification failed." }
+            Write-Host "Executable signed and signature verified."
+          }
+          finally {
+            Remove-Item $certPath -Force -ErrorAction SilentlyContinue
+          }
       - name: Package executable
         shell: pwsh
         run: |
