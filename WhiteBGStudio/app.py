@@ -2,7 +2,7 @@ import os, sys, threading, time, queue
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageTk
 import numpy as np
 import onnxruntime as ort
 
@@ -15,7 +15,7 @@ if os.path.isdir(bundled_model):
     os.environ["U2NET_HOME"] = bundled_model
 
 
-APP_NAME = "E-PIX BG STUDIO"
+APP_NAME = "E-PIX BG Studio"
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 
 def remove_background(image, session):
@@ -75,6 +75,9 @@ class App:
         self.panel = "#202226"
         self.canvas = tk.Canvas(self.root, bg=self.bg, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
+        logo_path = resource_path("e-pix-logo.jpg")
+        with Image.open(logo_path) as logo:
+            self.brand_logo = ImageTk.PhotoImage(logo.copy())
         self.canvas.bind("<Configure>", self.draw_dashboard)
         self.canvas.bind("<Button-1>", self.dashboard_click)
         self.source_display = ""
@@ -106,24 +109,26 @@ class App:
             c.create_line(3, y, side_w-3, y, fill=col, width=1)
         # Main charcoal vignette effect.
         c.create_rectangle(side_w+2, 0, design_w, h, fill="#101113", outline="")
-        # Sidebar action icons and labels at the same positions as the reference.
-        self._draw_folder_icon(c, 100, int(h*.22))
-        c.create_text(100, int(h*.305), text="Choose Folder", fill="#d8d6d7",
-                      font=("Segoe UI", 16))
-        self._draw_camera_icon(c, 100, int(h*.49))
-        c.create_text(100, int(h*.585), text="Choose Photo", fill="#d8d6d7",
-                      font=("Segoe UI", 16))
-        self._draw_output_icon(c, 100, int(h*.75))
-        c.create_text(100, int(h*.835), text="Output Folder", fill="#d8d6d7",
-                      font=("Segoe UI", 16))
+        # User-supplied E-PIX logo at the upper-left of the dashboard.
+        c.create_image(side_w//2, 105, image=self.brand_logo, anchor="center")
+        # Sidebar actions sit below the logo with clear spacing.
+        self._draw_folder_icon(c, 100, int(h*.31))
+        c.create_text(100, int(h*.375), text="Choose Folder", fill="#d8d6d7",
+                      font=("Segoe UI", 14))
+        self._draw_camera_icon(c, 100, int(h*.55))
+        c.create_text(100, int(h*.615), text="Choose Photo", fill="#d8d6d7",
+                      font=("Segoe UI", 14))
+        self._draw_output_icon(c, 100, int(h*.78))
+        c.create_text(100, int(h*.845), text="Output Folder", fill="#d8d6d7",
+                      font=("Segoe UI", 14))
         # Center brand panel, metallic badge and typography.
         cx = side_w + (design_w-side_w)//2
         self._metal_button(c, cx-68, int(h*.28)-68, cx+68, int(h*.28)+68)
         c.create_text(cx, int(h*.28), text="▣", fill="#15171a",
                       font=("Segoe UI Symbol", 48, "bold"))
-        c.create_text(cx, int(h*.47), text="E - PIX", fill="#d7d3d0",
+        c.create_text(cx, int(h*.47), text="E-PIX", fill="#d7d3d0",
                       font=("Segoe UI", 46, "bold"))
-        c.create_text(cx, int(h*.535), text="B G   S T U D I O", fill="#c6c2c4",
+        c.create_text(cx, int(h*.535), text="BG STUDIO", fill="#c6c2c4",
                       font=("Segoe UI Light", 21))
         self._metal_button(c, cx-92, int(h*.855)-44, cx+92, int(h*.855)+44)
         c.create_text(cx, int(h*.855), text=("START" if self.start_enabled else "PROCESSING..."),
