@@ -155,6 +155,11 @@ class App:
                       width=right_w-48, fill="#d1d4da", font=("Segoe UI", 9))
         c.create_text(px+12, 365, text="Activity log", anchor="w",
                       fill="#aeb4bd", font=("Segoe UI", 10, "bold"))
+        # Clear control is confined to the right-side status panel.
+        c.create_rectangle(w-108, 350, w-20, 380,
+                           fill="#343940", outline="#9ba0a7", width=2)
+        c.create_text(w-64, 365, text="CLEAR", fill="#f0f0f0",
+                      font=("Segoe UI", 9, "bold"))
         # Log and progress widgets are embedded in the right-side panel.
         self.log.place(x=px+12, y=390, width=right_w-34, height=max(120,h-490))
         self.progress.place(x=px+12, y=h-75, width=right_w-34, height=20)
@@ -191,6 +196,9 @@ class App:
         w = max(self.canvas.winfo_width(), 1200)
         h = max(self.canvas.winfo_height(), 760)
         design_w = w - max(280, int(w * 0.235))
+        if event.x >= w-112 and event.x <= w-16 and 346 <= event.y <= 384:
+            self.clear_progress()
+            return
         if event.x < 205:
             if event.y < h*0.39:
                 self.pick_folder()
@@ -227,6 +235,19 @@ class App:
     def say(self, message):
         self.log.configure(state="normal"); self.log.insert("end", message + "\n")
         self.log.see("end"); self.log.configure(state="disabled")
+
+    def clear_progress(self):
+        """Clear dashboard history and displayed progress; never touch photo files."""
+        self.log.configure(state="normal")
+        self.log.delete("1.0", "end")
+        self.log.configure(state="disabled")
+        self.progress.configure(value=0)
+        self.progress_value = 0
+        if self.busy:
+            self.status.set("Progress display cleared. Processing continues...")
+        else:
+            self.status.set("Ready. Progress details cleared.")
+        self.draw_dashboard()
 
     def inputs(self):
         if self.selected: return [Path(p) for p in self.selected]
