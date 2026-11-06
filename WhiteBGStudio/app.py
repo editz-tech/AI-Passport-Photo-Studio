@@ -15,7 +15,7 @@ if os.path.isdir(bundled_model):
     os.environ["U2NET_HOME"] = bundled_model
 
 
-APP_NAME = "WhiteBG Studio"
+APP_NAME = "E-PIX BG STUDIO"
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 
 def remove_background(image, session):
