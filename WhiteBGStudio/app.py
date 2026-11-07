@@ -2,7 +2,7 @@ import os, sys, threading, time, queue
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageOps, ImageTk
+from PIL import Image, ImageOps
 import numpy as np
 import onnxruntime as ort
 
@@ -61,15 +61,7 @@ class App:
             root.iconbitmap(resource_path("e-pix-icon.ico"))
         except tk.TclError:
             pass
-        # Display the supplied E-PIX logo in the upper-left dashboard sidebar.
-        self.dashboard_logo = None
-        try:
-            logo = Image.open(resource_path("e-pix-logo.jpg")).convert("RGB")
-            logo.thumbnail((76, 76), Image.Resampling.LANCZOS)
-            self.dashboard_logo = ImageTk.PhotoImage(logo)
-        except Exception:
-            self.dashboard_logo = None
-        root.geometry("1510x900")
+        # Sidebar starts with a dedicated bulk-photo selection action; no logo tile.\n        root.geometry("1510x900")
         root.minsize(1200, 760)
         root.configure(bg="#08090b")
         self.source = tk.StringVar()
@@ -119,9 +111,10 @@ class App:
             c.create_line(3, y, side_w-3, y, fill=col, width=1)
         # Main charcoal vignette effect.
         c.create_rectangle(side_w+2, 0, design_w, h, fill="#101113", outline="")
-        # Place the replacement logo at the top of the sidebar.
-        if self.dashboard_logo is not None:
-            c.create_image(100, 76, image=self.dashboard_logo, anchor="center")
+        # Dedicated bulk-photo action replaces the former black logo tile.
+        self._draw_bulk_icon(c, 100, 76)
+        c.create_text(100, 137, text="Bulk Photos", fill="#d8d6d7",
+                      font=("Segoe UI", 14))
         self._draw_folder_icon(c, 100, int(h*.31))
         c.create_text(100, int(h*.375), text="Choose Folder", fill="#d8d6d7",
                       font=("Segoe UI", 14))
@@ -186,6 +179,16 @@ class App:
             c.create_line(x1+5, yy, x2-5, yy, fill="#555a61", width=1)
         c.create_rectangle(x1+8, y1+8, x2-8, y2-8, outline="#b0b3b8", width=1)
 
+    def _draw_bulk_icon(self, c, x, y):
+        # Three overlapping photo frames with mountain/sun details indicate batch selection.
+        for dx, dy in [(-13, 7), (0, 0), (13, -7)]:
+            c.create_rectangle(x-30+dx, y-24+dy, x+30+dx, y+24+dy,
+                               fill="#292d33", outline="#aeb4bd", width=2)
+        c.create_oval(x+11, y-13, x+19, y-5, fill="#c5cbd4", outline="")
+        c.create_line(x-19, y+13, x-5, y-3, x+4, y+6, x+13, y-2,
+                      fill="#c5cbd4", width=3)
+        c.create_line(x-19, y+13, x+19, y+13, fill="#c5cbd4", width=2)
+
     def _draw_folder_icon(self, c, x, y):
         c.create_polygon(x-45,y-28,x-12,y-28,x,y-15,x+45,y-15,x+45,y+28,x-45,y+28,
                          fill="#353940", outline="#9ba0aa", width=3)
@@ -215,9 +218,11 @@ class App:
             self.clear_progress()
             return
         if event.x < 205:
-            if event.y < h*0.39:
+            if event.y < 170:
+                self.pick_bulk_files()
+            elif event.y < h*0.45:
                 self.pick_folder()
-            elif event.y < h*0.66:
+            elif event.y < h*0.69:
                 self.pick_files()
             else:
                 self.pick_output()
@@ -231,11 +236,33 @@ class App:
             self.source_display = p
             self.draw_dashboard()
 
-    def pick_files(self):
-        p = filedialog.askopenfilenames(title="Select photos", filetypes=[("Images","*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff")])
+    def pick_bulk_files(self):
+        """Select many image files from a folder in one operation."""
+        p = filedialog.askopenfilenames(
+            title="Select multiple photos for bulk processing",
+            filetypes=[("Image files", "*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff"),
+                       ("All files", "*.*")]
+        )
         if p:
-            self.selected = list(p); self.source.set(f"{len(p)} photos selected")
-            self.source_display = f"{len(p)} photo(s) selected"
+            self.selected = list(p)
+            folder = str(Path(p[0]).parent)
+            self.source.set(f"{len(p)} photos selected")
+            self.source_display = f"{len(p)} photos selected • {folder}"
+            self.status.set(f"{len(p)} photo(s) selected for bulk processing.")
+            self.say(f"Bulk selection: {len(p)} photo(s) selected from {folder}")
+            self.draw_dashboard()
+
+    def pick_files(self):
+        p = filedialog.askopenfilename(
+            title="Select one photo",
+            filetypes=[("Image files", "*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff"),
+                       ("All files", "*.*")]
+        )
+        if p:
+            self.selected = [p]
+            self.source.set(p)
+            self.source_display = Path(p).name
+            self.status.set("One photo selected.")
             self.draw_dashboard()
 
     def pick_output(self):
