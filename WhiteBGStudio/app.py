@@ -2,7 +2,7 @@ import os, sys, threading, time, queue
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageTk
 import numpy as np
 import onnxruntime as ort
 
@@ -61,6 +61,14 @@ class App:
             root.iconbitmap(resource_path("e-pix-icon.ico"))
         except tk.TclError:
             pass
+        # Display the supplied E-PIX logo in the upper-left dashboard sidebar.
+        self.dashboard_logo = None
+        try:
+            logo = Image.open(resource_path("e-pix-logo.jpg")).convert("RGB")
+            logo.thumbnail((76, 76), Image.Resampling.LANCZOS)
+            self.dashboard_logo = ImageTk.PhotoImage(logo)
+        except Exception:
+            self.dashboard_logo = None
         root.geometry("1510x900")
         root.minsize(1200, 760)
         root.configure(bg="#08090b")
@@ -111,8 +119,9 @@ class App:
             c.create_line(3, y, side_w-3, y, fill=col, width=1)
         # Main charcoal vignette effect.
         c.create_rectangle(side_w+2, 0, design_w, h, fill="#101113", outline="")
-        # Keep the sidebar clean: no large logo image or its black rectangular background.
-        # Sidebar actions sit below the logo with clear spacing.
+        # Place the replacement logo at the top of the sidebar.
+        if self.dashboard_logo is not None:
+            c.create_image(100, 76, image=self.dashboard_logo, anchor="center")
         self._draw_folder_icon(c, 100, int(h*.31))
         c.create_text(100, int(h*.375), text="Choose Folder", fill="#d8d6d7",
                       font=("Segoe UI", 14))

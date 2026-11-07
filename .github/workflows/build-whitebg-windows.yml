@@ -40,7 +40,7 @@ jobs:
       - name: Build Windows executable
         working-directory: WhiteBGStudio
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --name "E-PIX BG STUDIO" --icon "e-pix-icon.ico" --collect-all onnxruntime --hidden-import numpy --add-data ".u2net;.u2net" app.py
+          pyinstaller --noconfirm --clean --onefile --windowed --name "E-PIX BG STUDIO" --icon "e-pix-icon.ico" --collect-all onnxruntime --hidden-import numpy --add-data ".u2net;.u2net" --add-data "e-pix-logo.jpg;." app.py
       - name: Package executable
         shell: pwsh
         run: |
