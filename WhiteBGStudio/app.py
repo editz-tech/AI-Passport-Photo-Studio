@@ -1,4 +1,4 @@
-import os, sys, threading, time, queue
+import os, sys, threading, time, queue, json
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -66,6 +66,9 @@ class App:
         root.configure(bg="#08090b")
         self.source = tk.StringVar()
         self.output = tk.StringVar()
+        self.settings_file = self._settings_path()
+        self.default_output_path = self._load_default_output()
+        self.default_output = tk.BooleanVar(value=bool(self.default_output_path and Path(self.default_output_path).is_dir()))
         self.status = tk.StringVar(value="Choose photos or a source folder to begin.")
         self.selected = []
         self.busy = False
@@ -84,6 +87,10 @@ class App:
         self.canvas.bind("<Button-1>", self.dashboard_click)
         self.source_display = ""
         self.output_display = "Not selected"
+        if self.default_output.get():
+            self.output.set(self.default_output_path)
+            self.output_display = self.default_output_path
+            self.status.set("Saved default output folder loaded.")
         self.recursive = tk.BooleanVar(value=False)
         self.log = tk.Text(self.root, height=8, state="disabled", wrap="word",
                  bg="#17191d", fg="#d7d9dd", insertbackground="white",
@@ -149,27 +156,31 @@ class App:
                       font=("Segoe UI", 9))
         c.create_text(px+12, 170, text="Output folder", anchor="w",
                       fill="#aeb4bd", font=("Segoe UI", 10, "bold"))
-        c.create_text(px+12, 194, text=self.output_display,
-                      anchor="w", width=right_w-48, fill="#e2e4e8",
-                      font=("Segoe UI", 9))
-        c.create_text(px+12, 248, text="Progress", anchor="w",
+        c.create_rectangle(px+12, 220, px+31, 239,
+                           fill="#17191d", outline="#aeb4bd", width=2)
+        if self.default_output.get():
+            c.create_line(px+15, 229, px+20, 234, px+29, 224,
+                          fill="#dce3ed", width=3)
+        c.create_text(px+40, 230, text="Set as Default Output Folder",
+                      anchor="w", fill="#d8dce2", font=("Segoe UI", 9))
+        c.create_text(px+12, 274, text="Progress", anchor="w",
                       fill="#aeb4bd", font=("Segoe UI", 10, "bold"))
-        c.create_rectangle(px+12, 270, w-20, 286, fill="#33373d", outline="#737983")
+        c.create_rectangle(px+12, 296, w-20, 312, fill="#33373d", outline="#737983")
         prog_w = max(0, (w-32-px-12) * self.progress_value / 100)
         if prog_w:
-            c.create_rectangle(px+12, 270, px+12+prog_w, 286,
+            c.create_rectangle(px+12, 296, px+12+prog_w, 312,
                                fill="#18b83e", outline="")
-        c.create_text(px+12, 310, text=self.status.get(), anchor="w",
+        c.create_text(px+12, 336, text=self.status.get(), anchor="w",
                       width=right_w-48, fill="#d1d4da", font=("Segoe UI", 9))
-        c.create_text(px+12, 365, text="Activity log", anchor="w",
+        c.create_text(px+12, 391, text="Activity log", anchor="w",
                       fill="#aeb4bd", font=("Segoe UI", 10, "bold"))
         # Clear control is confined to the right-side status panel.
-        c.create_rectangle(w-108, 350, w-20, 380,
+        c.create_rectangle(w-108, 376, w-20, 406,
                            fill="#343940", outline="#9ba0a7", width=2)
-        c.create_text(w-64, 365, text="CLEAR", fill="#f0f0f0",
+        c.create_text(w-64, 391, text="CLEAR", fill="#f0f0f0",
                       font=("Segoe UI", 9, "bold"))
         # Log and progress widgets are embedded in the right-side panel.
-        self.log.place(x=px+12, y=390, width=right_w-34, height=max(120,h-490))
+        self.log.place(x=px+12, y=416, width=right_w-34, height=max(120,h-516))
         self.progress.place(x=px+12, y=h-75, width=right_w-34, height=20)
 
     def _metal_button(self, c, x1, y1, x2, y2):
@@ -214,8 +225,12 @@ class App:
         w = max(self.canvas.winfo_width(), 1200)
         h = max(self.canvas.winfo_height(), 760)
         design_w = w - max(280, int(w * 0.235))
-        if event.x >= w-112 and event.x <= w-16 and 346 <= event.y <= 384:
+        if event.x >= w-112 and event.x <= w-16 and 372 <= event.y <= 410:
             self.clear_progress()
+            return
+        right_x = design_w + 32
+        if right_x <= event.x <= right_x + 280 and 214 <= event.y <= 246:
+            self.toggle_default_output()
             return
         if event.x < 205:
             if event.y < 170:
@@ -272,7 +287,56 @@ class App:
             self.output_display = p
             self.say("Output folder: " + p)
             self.status.set("Output folder selected.")
+            if self.default_output.get():
+                self.default_output_path = p
+                self._save_default_output()
             self.draw_dashboard()
+
+    def _settings_path(self):
+        base = os.environ.get("APPDATA") or str(Path.home() / ".config")
+        folder = Path(base) / "E-PIX BG Studio"
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder / "settings.json"
+
+    def _load_default_output(self):
+        try:
+            data = json.loads(self.settings_file.read_text(encoding="utf-8"))
+            saved = data.get("default_output_folder", "")
+            return saved if saved and Path(saved).is_dir() else ""
+        except (OSError, ValueError, TypeError):
+            return ""
+
+    def _save_default_output(self):
+        try:
+            self.settings_file.parent.mkdir(parents=True, exist_ok=True)
+            data = {"default_output_folder": self.default_output_path}
+            self.settings_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except OSError as exc:
+            self.say(f"Could not save default output setting: {exc}")
+
+    def toggle_default_output(self):
+        if self.default_output.get():
+            self.default_output.set(False)
+            self.default_output_path = ""
+            try:
+                if self.settings_file.exists():
+                    self.settings_file.unlink()
+            except OSError as exc:
+                self.say(f"Could not clear saved output setting: {exc}")
+            self.status.set("Default output folder disabled.")
+            self.say("Default output folder setting turned off.")
+        else:
+            if not self.output.get().strip() or not Path(self.output.get()).is_dir():
+                messagebox.showinfo(APP_NAME, "Please choose an Output Folder first.")
+                self.pick_output()
+                if not self.output.get().strip() or not Path(self.output.get()).is_dir():
+                    return
+            self.default_output.set(True)
+            self.default_output_path = self.output.get()
+            self._save_default_output()
+            self.status.set("Default output folder saved for future sessions.")
+            self.say("Saved default output folder: " + self.default_output_path)
+        self.draw_dashboard()
 
     def say(self, message):
         self.log.configure(state="normal"); self.log.insert("end", message + "\n")
