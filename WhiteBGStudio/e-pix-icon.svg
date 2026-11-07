@@ -1,13 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
-<rect width="300" height="300" fill="#000"/>
-<defs><linearGradient id="silver" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#111"/><stop offset=".5" stop-color="#aaa"/><stop offset="1" stop-color="#fff"/></linearGradient></defs>
-<rect x="88" y="39" width="124" height="126" rx="15" fill="url(#silver)"/>
-<g stroke="#050505" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-<rect x="123" y="78" width="51" height="39" rx="2"/><path d="M130 126h37M148 117v9"/>
-<circle cx="162" cy="100" r="11"/><circle cx="162" cy="100" r="5"/>
-<path d="M162 85v4M162 111v4M147 100h4M173 100h4M151 89l3 3M170 108l3 3M151 111l3-3M170 92l3-3"/>
-<path d="M133 88v7M140 88v4M133 102v6M140 100v8"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+<defs>
+ <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8f8f8"/><stop offset=".48" stop-color="#bdbdbd"/><stop offset="1" stop-color="#f4f4f4"/></linearGradient>
+ <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset="1" stop-color="#777" stop-opacity=".08"/></linearGradient>
+</defs>
+<rect x="3" y="3" width="250" height="250" rx="27" fill="url(#metal)" stroke="#777" stroke-width="2"/>
+<rect x="3" y="3" width="250" height="250" rx="27" fill="url(#shine)"/>
+<g fill="none" stroke="#090909" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+ <rect x="72" y="72" width="112" height="91" rx="5"/>
+ <path d="M91 180h74M128 163v17M109 191h38"/>
+ <path d="M91 93v30M106 93v17M91 140v10M106 136v14"/>
+ <circle cx="153" cy="119" r="25" stroke-width="9"/>
+ <circle cx="153" cy="119" r="10" stroke-width="8"/>
+ <path d="M153 82v9M153 147v9M116 119h10M180 119h10M127 93l7 7M172 138l7 7M127 145l7-7M172 100l7-7" stroke-width="8"/>
 </g>
-<text x="49" y="242" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-size="66" font-weight="700" letter-spacing="-2">E-PIX</text>
-<text x="50" y="286" fill="#fff" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="300" letter-spacing="2">BG STUDIO</text>
 </svg>
