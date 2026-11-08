@@ -1,9 +1,12 @@
-"""AI Passport Photo Studio — initial desktop starter.
+"""AI Passport Photo Studio — Windows desktop app.
 
-Uses Pillow and Tkinter. Optional background removal uses rembg.
+Uses Pillow and Tkinter. Background removal uses the bundled rembg runtime
+and (in packaged builds) the bundled U2Net model.
 """
 from __future__ import annotations
 
+import os
+import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
@@ -11,6 +14,13 @@ from PIL import Image, ImageTk, ImageOps, ImageDraw
 
 APP_TITLE = "AI Passport Photo Studio"
 OUTPUT_SIZE = (413, 531)  # 35:45 mm at approximately 300 DPI
+
+# PyInstaller extracts bundled data into _MEIPASS. Point rembg at the
+# bundled model directory before importing rembg so the installed app works
+# without downloading the U2Net model on the user's first run.
+if getattr(sys, "frozen", False):
+    bundled_models = Path(sys._MEIPASS) / "models"
+    os.environ["U2NET_HOME"] = str(bundled_models)
 
 try:
     from rembg import remove as rembg_remove
@@ -52,7 +62,7 @@ class PassportPhotoStudio:
         ttk.Button(panel, text="Save as PNG…", command=lambda: self.save_photo("PNG")).pack(fill="x", pady=4)
         ttk.Separator(panel).pack(fill="x", pady=14)
         ttk.Label(panel, text="Notes", font=("Segoe UI", 11, "bold")).pack(anchor="w")
-        notes = "• Center crop only; no face alignment yet.\n\n• Background removal requires optional rembg installation and may download a model.\n\n• Check your destination country's official photo rules."
+        notes = "• Center crop only; no face alignment yet.\n\n• Background removal uses the bundled AI model.\n\n• Check your destination country's official photo rules."
         ttk.Label(panel, text=notes, wraplength=205, justify="left").pack(anchor="w", pady=(6, 0))
         self.status = tk.StringVar(value="Open a photo to begin.")
         ttk.Label(outer, textvariable=self.status, relief="sunken", anchor="w", padding=6).pack(fill="x", pady=(12, 0))
@@ -94,8 +104,7 @@ class PassportPhotoStudio:
             messagebox.showinfo("Open a photo first", "Choose a photo before removing its background.")
             return
         if rembg_remove is None:
-            if messagebox.askyesno("Optional feature", "Background removal needs the optional 'rembg' package. Try installing it now?\n\nThis may take time and download model files."):
-                messagebox.showinfo("Install rembg", "Open a terminal in the project folder and run:\n\npython -m pip install rembg\n\nThen restart the app.")
+            messagebox.showerror("Background removal unavailable", "The background-removal component could not be loaded. Please reinstall the application.")
             return
         try:
             rgba = self.processed.convert("RGBA")
