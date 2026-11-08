@@ -19,7 +19,7 @@ OUTPUT_SIZE = (413, 531)  # 35:45 mm at approximately 300 DPI
 # bundled model directory before importing rembg so the installed app works
 # without downloading the U2Net model on the user's first run.
 if getattr(sys, "frozen", False):
-    bundled_models = Path(sys._MEIPASS) / "models"
+    bundled_models = Path(sys._MEIPASS)
     os.environ["U2NET_HOME"] = str(bundled_models)
 
 try:
