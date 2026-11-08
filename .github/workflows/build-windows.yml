@@ -37,10 +37,10 @@ jobs:
       - name: Download and prepare the AI model for offline use
         shell: pwsh
         run: |
-          $env:U2NET_HOME = "$env:GITHUB_WORKSPACE\models"
+          $env:U2NET_HOME = "$env:GITHUB_WORKSPACE"
           New-Item -ItemType Directory -Force -Path $env:U2NET_HOME | Out-Null
           python -c "from rembg import new_session; new_session('u2net')"
-          if (-not (Test-Path "$env:U2NET_HOME\u2net.onnx")) {
+          if (-not (Test-Path "$env:U2NET_HOME\models\u2net\u2net.onnx")) {
             throw "The U2Net model was not downloaded to the expected location."
           }
 
