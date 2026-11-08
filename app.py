@@ -62,7 +62,7 @@ class PassportPhotoStudio:
         ttk.Button(panel, text="Save as PNG…", command=lambda: self.save_photo("PNG")).pack(fill="x", pady=4)
         ttk.Separator(panel).pack(fill="x", pady=14)
         ttk.Label(panel, text="Notes", font=("Segoe UI", 11, "bold")).pack(anchor="w")
-        notes = "• Center crop only; no face alignment yet.\\n\\n• Background removal uses the bundled AI model.\\n\\n• Check your destination country's official photo rules."
+        notes = "• Center crop only; no face alignment yet.\n\n• Background removal uses the bundled AI model.\n\n• Check your destination country's official photo rules."
         ttk.Label(panel, text=notes, wraplength=205, justify="left").pack(anchor="w", pady=(6, 0))
         self.status = tk.StringVar(value="Open a photo to begin.")
         ttk.Label(outer, textvariable=self.status, relief="sunken", anchor="w", padding=6).pack(fill="x", pady=(12, 0))
@@ -161,7 +161,7 @@ class PassportPhotoStudio:
             else:
                 output.save(path, format="PNG", dpi=(300, 300), optimize=True)
             self.status.set(f"Saved: {path} • {OUTPUT_SIZE[0]} × {OUTPUT_SIZE[1]} px")
-            messagebox.showinfo("Export complete", f"Saved passport-style photo to:\\n{path}\\n\\nOutput: {OUTPUT_SIZE[0]} × {OUTPUT_SIZE[1]} px at 300 DPI. Please verify official requirements.")
+            messagebox.showinfo("Export complete", f"Saved passport-style photo to:\n{path}\n\nOutput: {OUTPUT_SIZE[0]} × {OUTPUT_SIZE[1]} px at 300 DPI. Please verify official requirements.")
         except Exception as exc:
             messagebox.showerror("Could not save photo", str(exc))
 
